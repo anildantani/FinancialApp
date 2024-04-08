@@ -1,25 +1,55 @@
-import React, { useContext } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { TransactionContext } from './TransactionContext';
+import { firestore } from '../firebase';
+import { useFocusEffect } from '@react-navigation/native';
+import { collection, getDocs } from 'firebase/firestore';
 
 function SummaryScreen() {
-  const { transactions } = useContext(TransactionContext);
+  const [transactions, setTransactions] = useState([]);
+  const [totalExpenses, setTotalExpenses] = useState(0);
+  const [highestSpending, setHighestSpending] = useState(null);
+  const [lowestSpending, setLowestSpending] = useState(null);
 
-  const totalExpenses = transactions.reduce((total, transaction) => total + parseFloat(transaction.amount), 0);
+  const fetchTransactions = async () => {
+    try {
+      const transactionsCollection = collection(firestore, 'transactions')
+      const querySnapshot = await getDocs(transactionsCollection);
 
-  let highestSpending = null;
-  let lowestSpending = null;
+      const transactionsList = [];
+      let highest = null;
+      let lowest = null;
+      let total = 0;
 
-  transactions.forEach(transaction => {
-    const amount = parseFloat(transaction.amount);
+      querySnapshot.forEach((doc) => {
+        const transactionData = doc.data();
+        const amount = parseFloat(transactionData.amount);
+        transactionsList.push({ id: doc.id, ...transactionData });
+        total += amount;
 
-    if (!highestSpending || amount > highestSpending.amount) {
-      highestSpending = { ...transaction, amount };
+        if (!highest || amount > parseFloat(highest.amount)) {
+          highest = { id: doc.id, ...transactionData };
+        }
+
+        if (!lowest || amount < parseFloat(lowest.amount)) {
+          lowest = { id: doc.id, ...transactionData };
+        }
+      });
+
+      setTransactions(transactionsList);
+      setTotalExpenses(total);
+      setHighestSpending(highest);
+      setLowestSpending(lowest);
+    } catch (error) {
+      console.error('Error fetching transactions:', error);
     }
+  };
 
-    if (!lowestSpending || amount < lowestSpending.amount) {
-      lowestSpending = { ...transaction, amount };
-    }
+  useEffect(() => {
+    fetchTransactions();
+  }, []);
+
+  useFocusEffect(() => {
+    fetchTransactions();
   });
 
   return (
@@ -28,22 +58,26 @@ function SummaryScreen() {
       <View style={styles.box}>
         <View style={styles.row}>
           <Text style={styles.label}>Total Transactions:</Text>
-          <Text style={styles.value}>{transactions.length}</Text>
+          <Text style={styles.totalamount}>{transactions.length}</Text>
         </View>
-        <View style={styles.divider} />
+        <View style={styles.horizontalLine} />
         <View style={styles.row}>
           <Text style={styles.label}>Total Expenses:</Text>
-          <Text style={styles.value}>${totalExpenses.toFixed(2)}</Text>
+          <Text style={styles.totalamount}>${totalExpenses}</Text>
         </View>
-        <View style={styles.divider} />
+        <View style={styles.horizontalLine} />
         <View style={styles.row}>
           <Text style={styles.label}>Highest Spending:</Text>
-          <Text style={styles.value}>{highestSpending ? `${highestSpending.name}: $${highestSpending.amount.toFixed(2)}` : '-'}</Text>
         </View>
-        <View style={styles.divider} />
+        <View style={styles.row}>
+          <Text style={styles.amount}>{highestSpending ? `${highestSpending.name}: $${highestSpending.amount}` : '-'}</Text>
+        </View>
+        <View style={styles.horizontalLine} />
         <View style={styles.row}>
           <Text style={styles.label}>Lowest Spending:</Text>
-          <Text style={styles.value}>{lowestSpending ? `${lowestSpending.name}: $${lowestSpending.amount.toFixed(2)}` : '-'}</Text>
+        </View>
+        <View style={styles.row}>
+          <Text style={styles.amount}>{lowestSpending ? `${lowestSpending.name}: $${lowestSpending.amount}` : '-'}</Text>
         </View>
       </View>
     </View>
@@ -56,7 +90,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'flex-start',
     padding: 20,
-    backgroundColor: '#f0f0f0',
   },
   title: {
     fontSize: 24,
@@ -65,32 +98,34 @@ const styles = StyleSheet.create({
   },
   box: {
     borderWidth: 1,
-    borderColor: '#39b8cc',
+    borderColor: '#023020',
     borderRadius: 10,
     padding: 20,
     width: '100%',
-    backgroundColor: '#fff',
+    backgroundColor: '#ECFFDC',
   },
   row: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
     marginBottom: 10,
   },
   label: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#333',
+    fontSize: 20,
+    fontWeight: 'bold',
   },
-  value: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#333',
-  },
-  divider: {
+  horizontalLine: {
     borderBottomWidth: 1,
     borderBottomColor: '#ccc',
     marginBottom: 10,
+  },
+  totalamount: {
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  amount: {
+    fontSize: 18,
+    marginTop: 5,
+    fontWeight: 'bold',
   },
 });
 
